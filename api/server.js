@@ -31,7 +31,7 @@ const runScript = async (scriptPath, env) => {
         ...process.env, 
         ...env,
       },
-      cwd: path.resolve(__dirname, '..')
+      cwd: path.resolve(__dirname)
     });
 
     let output = '';
@@ -90,10 +90,10 @@ app.post('/deploy-token', async (req, res) => {
             TOKEN_TELEGRAM: tokenData.telegram,
             TOKEN_SUPPLY: tokenData.initialSupply,
             ADDRESS_OWNER: tokenData.addressOwner,
-            HARDHAT_CONFIG: 'hardhat.config.cjs'
+            HARDHAT_CONFIG: '../hardhat.config.cjs'
         };
 
-        const { output, error } = await runScript('./scripts/deploy.cjs', scriptEnv);
+        const { output, error } = await runScript('./deploy.cjs', scriptEnv);
 
         res.json({ 
             success: true, 
