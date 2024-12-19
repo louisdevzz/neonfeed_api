@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node api/server.js",
     "dev": "node api/server.js",
-    "build": "npm install"
+    "build": "npm install",
+    "deploy": "node scripts/deploy.cjs",
+    "verify": "node scripts/verify.cjs"
   },
   "dependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

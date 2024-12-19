@@ -1,10 +1,13 @@
 import express from 'express';
 import { config } from 'dotenv';
 import cors from 'cors';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const execAsync = promisify(exec);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 config();
 
 const app = express();
@@ -17,6 +20,35 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Helper function to run scripts
+const runScript = async (scriptPath, env) => {
+  return new Promise((resolve, reject) => {
+    const process = spawn('node', [scriptPath], {
+      env: { ...env, PATH: process.env.PATH },
+      cwd: path.resolve(__dirname, '..')
+    });
+
+    let output = '';
+    let error = '';
+
+    process.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    process.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    process.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Script exited with code ${code}\n${error}`));
+      } else {
+        resolve({ output, error });
+      }
+    });
+  });
+};
 
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -36,38 +68,32 @@ app.post('/deploy-token', async (req, res) => {
             });
         }
 
-        const command = `TOKEN_NAME="${tokenData.name}" ` +
-            `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
-            `TOKEN_IMAGE="${tokenData.tokenImage}" ` +
-            `TOKEN_TWITTER="${tokenData.twitter}" ` +
-            `TOKEN_FACEBOOK="${tokenData.facebook}" ` +
-            `TOKEN_TELEGRAM="${tokenData.telegram}" ` +
-            `TOKEN_SUPPLY="${tokenData.initialSupply}" ` +
-            `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
-            `HARDHAT_CONFIG=hardhat.config.cjs npx hardhat run scripts/deploy.cjs --network ancient8-celestia-testnet`;
+        const scriptEnv = {
+            TOKEN_NAME: tokenData.name,
+            TOKEN_SYMBOL: tokenData.symbol.toUpperCase(),
+            TOKEN_IMAGE: tokenData.tokenImage,
+            TOKEN_TWITTER: tokenData.twitter,
+            TOKEN_FACEBOOK: tokenData.facebook,
+            TOKEN_TELEGRAM: tokenData.telegram,
+            TOKEN_SUPPLY: tokenData.initialSupply,
+            ADDRESS_OWNER: tokenData.addressOwner,
+            HARDHAT_CONFIG: 'hardhat.config.cjs'
+        };
 
-        const { stdout, stderr } = await execAsync(command, {
-            maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-            timeout: 180000 // 3 minutes timeout
-        });
-
-        if (stderr) {
-            console.warn("Deploy stderr:", stderr);
-        }
+        const { output, error } = await runScript('./scripts/deploy.cjs', scriptEnv);
 
         res.json({ 
             success: true, 
             message: 'Token deployed successfully',
-            deploymentResult: stdout,
-            logs: stderr
+            deploymentResult: output,
+            logs: error
         });
     } catch (error) {
         console.error("Deployment error:", error);
         res.status(500).json({ 
             success: false, 
             message: 'Error deploying token',
-            error: error.message,
-            command: error.cmd
+            error: error.message
         });
     }
 });
@@ -83,39 +109,33 @@ app.post('/verify-token', async (req, res) => {
             });
         }
 
-        const command = `CONTRACT_ADDRESS="${tokenData.contractAddress}" ` +
-            `TOKEN_NAME="${tokenData.name}" ` +
-            `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
-            `TOKEN_IMAGE="${tokenData.tokenImage}" ` +
-            `TOKEN_TWITTER="${tokenData.twitter}" ` +
-            `TOKEN_FACEBOOK="${tokenData.facebook}" ` +
-            `TOKEN_TELEGRAM="${tokenData.telegram}" ` +
-            `TOKEN_SUPPLY="${tokenData.initialSupply}" ` +
-            `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
-            `HARDHAT_CONFIG=hardhat.config.cjs npx hardhat run scripts/verify.cjs --network ancient8-celestia-testnet`;
+        const scriptEnv = {
+            CONTRACT_ADDRESS: tokenData.contractAddress,
+            TOKEN_NAME: tokenData.name,
+            TOKEN_SYMBOL: tokenData.symbol.toUpperCase(),
+            TOKEN_IMAGE: tokenData.tokenImage,
+            TOKEN_TWITTER: tokenData.twitter,
+            TOKEN_FACEBOOK: tokenData.facebook,
+            TOKEN_TELEGRAM: tokenData.telegram,
+            TOKEN_SUPPLY: tokenData.initialSupply,
+            ADDRESS_OWNER: tokenData.addressOwner,
+            HARDHAT_CONFIG: 'hardhat.config.cjs'
+        };
 
-        const { stdout, stderr } = await execAsync(command, {
-            maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-            timeout: 180000 // 3 minutes timeout
-        });
-
-        if (stderr) {
-            console.warn("Verify stderr:", stderr);
-        }
+        const { output, error } = await runScript('./scripts/verify.cjs', scriptEnv);
 
         res.json({ 
             success: true, 
             message: 'Token verified successfully',
-            verificationResult: stdout,
-            logs: stderr
+            verificationResult: output,
+            logs: error
         });
     } catch (error) {
         console.error("Verification error:", error);
         res.status(500).json({ 
             success: false, 
             message: 'Error verifying token',
-            error: error.message,
-            command: error.cmd
+            error: error.message
         });
     }
 });
