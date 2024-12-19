@@ -1,5 +1,5 @@
-require("@nomicfoundation/hardhat-toolbox");
 require('dotenv').config();
+require("@nomicfoundation/hardhat-toolbox");
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
@@ -15,15 +15,15 @@ module.exports = {
     }
   },
   networks: {
-    'ancient8-celestia-testnet': {
-      url: 'https://rpcv2-testnet.ancient8.gg',
+    "ancient8-celestia-testnet": {
+      url: "https://rpcv2-testnet.ancient8.gg",
       chainId: 28122024,
       accounts: [PRIVATE_KEY]
     }
   },
   etherscan: {
     apiKey: {
-      'ancient8-celestia-testnet': 'empty'
+      "ancient8-celestia-testnet": "empty"
     },
     customChains: [
       {
@@ -31,7 +31,7 @@ module.exports = {
         chainId: 28122024,
         urls: {
           apiURL: "https://scanv2-testnet.ancient8.gg/api",
-          browserURL: "https://scanv2-testnet.ancient8.gg:443"
+          browserURL: "https://scanv2-testnet.ancient8.gg"
         }
       }
     ]

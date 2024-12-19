@@ -8,17 +8,19 @@
   },
   "scripts": {
     "start": "node api/server.js",
-    "dev": "node api/server.js",
-    "build": "npm install",
-    "deploy": "node scripts/deploy.cjs",
-    "verify": "node scripts/verify.cjs"
+    "dev": "node api/server.js"
   },
   "dependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^5.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "hardhat": "^2.22.17"
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "hardhat": "^2.22.17",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
   }
 }
