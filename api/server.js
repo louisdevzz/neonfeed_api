@@ -1,12 +1,12 @@
 import express from 'express';
 import { config } from 'dotenv';
 import cors from 'cors';
-import { spawn } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 
-const require = createRequire(import.meta.url);
+const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -15,53 +15,13 @@ config();
 const app = express();
 
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://neonfeed.vercel.app','*'],
+  origin: ['http://localhost:3000', 'https://neonfeed.vercel.app', '*'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
-
-// Helper function to run scripts
-const runScript = async (scriptPath, env) => {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn('node', [scriptPath], {
-      env: { 
-        ...process.env, 
-        ...env,
-      },
-      cwd: path.resolve(__dirname)
-    });
-
-    let output = '';
-    let error = '';
-
-    childProcess.stdout.on('data', (data) => {
-      output += data.toString();
-      console.log(data.toString()); // Log output in real-time
-    });
-
-    childProcess.stderr.on('data', (data) => {
-      error += data.toString();
-      console.error(data.toString()); // Log errors in real-time
-    });
-
-    childProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Process exited with code ${code}`);
-        reject(new Error(`Script exited with code ${code}\n${error}`));
-      } else {
-        resolve({ output, error });
-      }
-    });
-
-    childProcess.on('error', (err) => {
-      console.error('Failed to start subprocess:', err);
-      reject(err);
-    });
-  });
-};
 
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -71,42 +31,61 @@ app.post('/deploy-token', async (req, res) => {
     try {
         const tokenData = req.body;
         
-        if (!tokenData.addressOwner || 
-            tokenData.addressOwner === 'null' || 
-            !tokenData.addressOwner.startsWith('0x') || 
-            tokenData.addressOwner.length !== 42) {
+        // Validate required fields
+        if (!tokenData || !tokenData.name || !tokenData.symbol || !tokenData.addressOwner) {
             return res.status(400).json({
                 success: false,
-                message: 'Valid Ethereum address is required'
+                message: 'Missing required fields: name, symbol, or addressOwner'
             });
         }
 
-        const scriptEnv = {
-            TOKEN_NAME: tokenData.name,
-            TOKEN_SYMBOL: tokenData.symbol.toUpperCase(),
-            TOKEN_IMAGE: tokenData.tokenImage,
-            TOKEN_TWITTER: tokenData.twitter,
-            TOKEN_FACEBOOK: tokenData.facebook,
-            TOKEN_TELEGRAM: tokenData.telegram,
-            TOKEN_SUPPLY: tokenData.initialSupply,
-            ADDRESS_OWNER: tokenData.addressOwner,
-            HARDHAT_CONFIG: '../hardhat.config.cjs'
-        };
+        // Validate address format
+        if (!tokenData.addressOwner.startsWith('0x') || tokenData.addressOwner.length !== 42) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Ethereum address format'
+            });
+        }
 
-        const { output, error } = await runScript('./deploy.cjs', scriptEnv);
+        const command = `cd ${path.resolve(__dirname, '..')} && ` +
+            `TOKEN_NAME="${tokenData.name}" ` +
+            `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
+            `TOKEN_IMAGE="${tokenData.tokenImage || ''}" ` +
+            `TOKEN_TWITTER="${tokenData.twitter || ''}" ` +
+            `TOKEN_FACEBOOK="${tokenData.facebook || ''}" ` +
+            `TOKEN_TELEGRAM="${tokenData.telegram || ''}" ` +
+            `TOKEN_SUPPLY="${tokenData.initialSupply || '100000000'}" ` +
+            `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
+            `npx hardhat run scripts/deploy.cjs --network ancient8-celestia-testnet`;
 
-        res.json({ 
-            success: true, 
+        console.log('Executing command:', command);
+
+        const { stdout, stderr } = await execAsync(command, {
+            maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+        });
+
+        if (stderr) {
+            console.warn('Deploy stderr:', stderr);
+        }
+
+        // Look for the contract address in the output
+        const addressMatch = stdout.match(/Token deployed to (0x[a-fA-F0-9]{40})/);
+        const contractAddress = addressMatch ? addressMatch[1] : null;
+
+        res.json({
+            success: true,
             message: 'Token deployed successfully',
-            deploymentResult: output,
-            logs: error
+            contractAddress,
+            output: stdout,
+            logs: stderr
         });
     } catch (error) {
-        console.error("Deployment error:", error);
-        res.status(500).json({ 
-            success: false, 
+        console.error('Deployment error:', error);
+        res.status(500).json({
+            success: false,
             message: 'Error deploying token',
-            error: error.message
+            error: error.message,
+            details: error.stack
         });
     }
 });
@@ -115,44 +94,75 @@ app.post('/verify-token', async (req, res) => {
     try {
         const tokenData = req.body;
         
-        if (!tokenData.contractAddress || !tokenData.addressOwner) {
+        // Validate required fields
+        if (!tokenData || !tokenData.contractAddress || !tokenData.name || !tokenData.symbol || !tokenData.addressOwner) {
             return res.status(400).json({
                 success: false,
-                message: 'Contract address and owner address are required'
+                message: 'Missing required fields: contractAddress, name, symbol, or addressOwner'
             });
         }
 
-        const scriptEnv = {
-            CONTRACT_ADDRESS: tokenData.contractAddress,
-            TOKEN_NAME: tokenData.name,
-            TOKEN_SYMBOL: tokenData.symbol.toUpperCase(),
-            TOKEN_IMAGE: tokenData.tokenImage,
-            TOKEN_TWITTER: tokenData.twitter,
-            TOKEN_FACEBOOK: tokenData.facebook,
-            TOKEN_TELEGRAM: tokenData.telegram,
-            TOKEN_SUPPLY: tokenData.initialSupply,
-            ADDRESS_OWNER: tokenData.addressOwner,
-            HARDHAT_CONFIG: 'hardhat.config.cjs'
-        };
+        // Validate contract address format
+        if (!tokenData.contractAddress.startsWith('0x') || tokenData.contractAddress.length !== 42) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid contract address format'
+            });
+        }
 
-        const { output, error } = await runScript('./scripts/verify.cjs', scriptEnv);
+        // Validate owner address format
+        if (!tokenData.addressOwner.startsWith('0x') || tokenData.addressOwner.length !== 42) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid owner address format'
+            });
+        }
 
-        res.json({ 
-            success: true, 
-            message: 'Token verified successfully',
-            verificationResult: output,
-            logs: error
+        const command = `cd ${path.resolve(__dirname, '..')} && ` +
+            `CONTRACT_ADDRESS="${tokenData.contractAddress}" ` +
+            `TOKEN_NAME="${tokenData.name}" ` +
+            `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
+            `TOKEN_IMAGE="${tokenData.tokenImage || ''}" ` +
+            `TOKEN_TWITTER="${tokenData.twitter || ''}" ` +
+            `TOKEN_FACEBOOK="${tokenData.facebook || ''}" ` +
+            `TOKEN_TELEGRAM="${tokenData.telegram || ''}" ` +
+            `TOKEN_SUPPLY="${tokenData.initialSupply || '100000000'}" ` +
+            `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
+            `npx hardhat run scripts/verify.cjs --network ancient8-celestia-testnet`;
+
+        console.log('Executing verification command:', command);
+
+        const { stdout, stderr } = await execAsync(command, {
+            maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+        });
+
+        if (stderr) {
+            console.warn('Verify stderr:', stderr);
+        }
+
+        // Look for verification success message
+        const isVerified = stdout.includes('Successfully verified') || 
+                          stdout.includes('Already verified');
+
+        res.json({
+            success: true,
+            message: isVerified ? 'Token verified successfully' : 'Verification process completed',
+            verified: isVerified,
+            output: stdout,
+            logs: stderr
         });
     } catch (error) {
-        console.error("Verification error:", error);
-        res.status(500).json({ 
-            success: false, 
+        console.error('Verification error:', error);
+        res.status(500).json({
+            success: false,
             message: 'Error verifying token',
-            error: error.message
+            error: error.message,
+            details: error.stack
         });
     }
 });
 
+// For local development only
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
