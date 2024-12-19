@@ -1,7 +1,6 @@
-import pkg from 'hardhat';
-const { ethers } = pkg;
+const { ethers } = require('hardhat');
 
-export async function deployToken(tokenData) {
+async function deployToken(tokenData) {
     try {
         // Get the Token contract factory
         const Token = await ethers.getContractFactory("Token");
@@ -29,4 +28,6 @@ export async function deployToken(tokenData) {
     } catch (error) {
         throw new Error(`Token deployment failed: ${error.message}`);
     }
-} 
+}
+
+module.exports = { deployToken }; 

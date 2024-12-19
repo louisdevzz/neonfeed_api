@@ -1,7 +1,7 @@
 import express from 'express';
 import { config } from 'dotenv';
 import cors from 'cors';
-import { deployToken } from './deployToken.js';
+import { deployToken } from './deployToken.cjs';
 
 config();
 
