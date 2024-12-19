@@ -11,8 +11,5 @@
       "src": "/(.*)",
       "dest": "api/server.js"
     }
-  ],
-  "env": {
-    "PRIVATE_KEY": "@private_key"
-  }
+  ]
 } 
