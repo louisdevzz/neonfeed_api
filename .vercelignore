@@ -5,4 +5,4 @@ test
 scripts
 contracts
 cache
-artifacts 
+!artifacts 
