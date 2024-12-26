@@ -98,25 +98,38 @@ app.post('/verify-token', async (req, res) => {
 
         console.log("Verification data:", tokenData);
 
-        const result = execSync(
-            `CONTRACT_ADDRESS="${tokenData.contractAddress}" ` +
-            `TOKEN_NAME="${tokenData.name}" ` +
-            `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
-            `TOKEN_IMAGE="${tokenData.tokenImage}" ` +
-            `TOKEN_TWITTER="${tokenData.twitter}" ` +
-            `TOKEN_FACEBOOK="${tokenData.facebook}" ` +
-            `TOKEN_TELEGRAM="${tokenData.telegram}" ` +
-            `TOKEN_SUPPLY="${tokenData.initialSupply}" ` +
-            `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
-            `HARDHAT_CONFIG=hardhat.config.cjs npx hardhat run scripts/verify.cjs --network ancient8-celestia-testnet`,
-            { encoding: 'utf-8' }
-        );
+        try {
+            const result = execSync(
+                `CONTRACT_ADDRESS="${tokenData.contractAddress}" ` +
+                `TOKEN_NAME="${tokenData.name}" ` +
+                `TOKEN_SYMBOL="${tokenData.symbol.toUpperCase()}" ` +
+                `TOKEN_IMAGE="${tokenData.tokenImage}" ` +
+                `TOKEN_TWITTER="${tokenData.twitter}" ` +
+                `TOKEN_FACEBOOK="${tokenData.facebook}" ` +
+                `TOKEN_TELEGRAM="${tokenData.telegram}" ` +
+                `TOKEN_SUPPLY="${tokenData.initialSupply}" ` +
+                `ADDRESS_OWNER="${tokenData.addressOwner}" ` +
+                `HARDHAT_CONFIG=hardhat.config.cjs npx hardhat run scripts/verify.cjs --network ancient8-celestia-testnet`,
+                { encoding: 'utf-8' }
+            );
 
-        res.json({ 
-            success: true, 
-            message: 'Token verified successfully on Ancient8 testnet',
-            verificationResult: result
-        });
+            res.json({ 
+                success: true, 
+                message: 'Token verified successfully on Ancient8 testnet',
+                verificationResult: result
+            });
+        } catch (execError) {
+            // Check if the error is "ContractAlreadyVerified"
+            if (execError.message.includes('ContractAlreadyVerified')) {
+                return res.json({ 
+                    success: true, 
+                    message: 'Contract is already verified on Ancient8 testnet',
+                    verificationResult: 'Contract was previously verified'
+                });
+            }
+            // If it's a different error, throw it to be caught by the outer catch block
+            throw execError;
+        }
     } catch (error) {
         console.error("Verification error:", error);
         res.status(500).json({ 
